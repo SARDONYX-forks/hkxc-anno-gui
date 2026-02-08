@@ -11,10 +11,10 @@ rust-version = "1.91"
 
 [workspace]
 members = [
+  "crates/cli",
   "crates/gui/src-tauri",
   "crates/serde_hkx_hkanno",
   "crates/tracing_rotation",
-  # "crates/hkxc_anno_cli",
 ]
 resolver = "2"
 
