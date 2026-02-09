@@ -2,7 +2,7 @@ use snafu::ResultExt;
 use std::{path::Path, str::FromStr as _};
 use tokio::fs;
 
-use crate::{parse_as_hkanno, parse_hkanno_str, HkannoError, IoSnafu, OutFormat};
+use crate::{parse_as_hkanno, parse_hkanno_str, Format, HkannoError, IoSnafu};
 
 /// Read hkanno from `xml`, `hkx` file.
 ///
@@ -35,7 +35,7 @@ pub async fn apply_hkanno(
         .await
         .with_context(|_| IoSnafu { path: input })?;
 
-    let format = OutFormat::from_str(format).map_err(|_| HkannoError::InvalidOutputFormat {
+    let format = Format::from_str(format).map_err(|_| HkannoError::InvalidOutputFormat {
         format: format.to_string(),
     })?;
     let updated = parse_hkanno_str(hkanno)?.update_hkx_bytes(&mut bytes, format, input)?;
@@ -59,6 +59,6 @@ pub async fn hkanno_apply_xml_string(input: &Path, hkanno: &str) -> Result<Strin
         .await
         .with_context(|_| IoSnafu { path: input })?;
 
-    let new_xml = parse_hkanno_str(hkanno)?.update_hkx_bytes(&mut bytes, OutFormat::Xml, input)?;
+    let new_xml = parse_hkanno_str(hkanno)?.update_hkx_bytes(&mut bytes, Format::Xml, input)?;
     Ok(String::from_utf8(new_xml)?)
 }

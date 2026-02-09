@@ -1449,8 +1449,8 @@ checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 
 [[package]]
 name = "havok_classes"
-version = "0.7.2"
-source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=961233d#961233dbb8a36d027d626ca573656b2dcb959ad4"
+version = "1.0.0"
+source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=f49aa22#f49aa22e9181f95cf62e84341dc6b466cfc14be5"
 dependencies = [
  "bitflags 2.10.0",
  "educe",
@@ -1465,8 +1465,8 @@ dependencies = [
 
 [[package]]
 name = "havok_serde"
-version = "0.7.2"
-source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=961233d#961233dbb8a36d027d626ca573656b2dcb959ad4"
+version = "1.0.0"
+source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=f49aa22#f49aa22e9181f95cf62e84341dc6b466cfc14be5"
 dependencies = [
  "arrayvec",
  "havok_types",
@@ -1475,8 +1475,8 @@ dependencies = [
 
 [[package]]
 name = "havok_types"
-version = "0.7.2"
-source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=961233d#961233dbb8a36d027d626ca573656b2dcb959ad4"
+version = "1.0.0"
+source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=f49aa22#f49aa22e9181f95cf62e84341dc6b466cfc14be5"
 dependencies = [
  "lexical",
  "parse-display",
@@ -1487,8 +1487,8 @@ dependencies = [
 
 [[package]]
 name = "havok_types_derive"
-version = "0.7.2"
-source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=961233d#961233dbb8a36d027d626ca573656b2dcb959ad4"
+version = "1.0.0"
+source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=f49aa22#f49aa22e9181f95cf62e84341dc6b466cfc14be5"
 dependencies = [
  "havok_types_derive_proc_macros",
 ]
@@ -1496,7 +1496,7 @@ dependencies = [
 [[package]]
 name = "havok_types_derive_proc_macros"
 version = "0.1.0"
-source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=961233d#961233dbb8a36d027d626ca573656b2dcb959ad4"
+source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=f49aa22#f49aa22e9181f95cf62e84341dc6b466cfc14be5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3050,8 +3050,8 @@ dependencies = [
 
 [[package]]
 name = "serde_hkx"
-version = "0.7.2"
-source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=961233d#961233dbb8a36d027d626ca573656b2dcb959ad4"
+version = "1.0.0"
+source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=f49aa22#f49aa22e9181f95cf62e84341dc6b466cfc14be5"
 dependencies = [
  "annotate-snippets",
  "byteorder",
@@ -3068,8 +3068,8 @@ dependencies = [
 
 [[package]]
 name = "serde_hkx_features"
-version = "0.7.2"
-source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=961233d#961233dbb8a36d027d626ca573656b2dcb959ad4"
+version = "1.0.0"
+source = "git+https://github.com/SARDONYX-sard/serde-hkx?rev=f49aa22#f49aa22e9181f95cf62e84341dc6b466cfc14be5"
 dependencies = [
  "basic-toml",
  "clap",
@@ -3108,16 +3108,16 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.145"
+version = "1.0.149"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "402a6f66d8c709116cf22f558eab210f5a50187f702eb4d7e5ef38d9a7f1c79c"
+checksum = "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86"
 dependencies = [
  "indexmap 2.12.1",
  "itoa 1.0.15",
  "memchr",
- "ryu",
  "serde",
  "serde_core",
+ "zmij",
 ]
 
 [[package]]
@@ -3870,9 +3870,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.48.0"
+version = "1.49.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff360e02eab121e0bc37a2d3b4d4dc622e6eda3a8e5253d5435ecf5bd4c68408"
+checksum = "72a2903cd7736441aac9df9d7688bd0ce48edccaadf181c3b90be801e81d3d86"
 dependencies = [
  "bytes",
  "libc",
@@ -5032,3 +5032,9 @@ dependencies = [
  "quote",
  "syn 2.0.111",
 ]
+
+[[package]]
+name = "zmij"
+version = "1.0.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4de98dfa5d5b7fef4ee834d0073d560c9ca7b6c46a71d058c48db7960f8cfaf7"

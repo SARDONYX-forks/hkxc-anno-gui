@@ -58,7 +58,7 @@ use snafu::ResultExt as _;
 use std::{borrow::Cow, fmt, path::Path};
 
 pub use crate::parser::{parse_hkanno_str, HkannoParseError};
-pub use serde_hkx_features::OutFormat;
+pub use serde_hkx_features::Format;
 
 /// # hkanno module
 ///
@@ -210,7 +210,7 @@ impl<'a> Hkanno<'a> {
     pub fn update_hkx_bytes(
         self,
         bytes: &mut Vec<u8>,
-        format: OutFormat,
+        format: Format,
         input: &Path,
     ) -> Result<Vec<u8>, HkannoError> {
         let mut text = String::new();
@@ -223,7 +223,7 @@ impl<'a> Hkanno<'a> {
 
         // Serialize back to bytes(NOTE: Binary data requires pre-sorting, so it is marked as &mut class_map.)
         let updated_bytes = match format {
-            OutFormat::Amd64 | OutFormat::Win32 | OutFormat::Xml => {
+            Format::Amd64 | Format::Win32 | Format::Xml => {
                 serde_hkx_features::serde::ser::to_bytes(input, format, &mut class_map)
             }
             _ => unreachable!("This being called means a new format type has been created."),

@@ -2,7 +2,8 @@
 
 use std::path::PathBuf;
 
-use serde_hkx_hkanno::OutFormat;
+use serde_hkx_features::progress::ProgressHandler;
+use serde_hkx_hkanno::Format;
 
 #[derive(Debug, clap::Args)]
 #[clap(arg_required_else_help = true)]
@@ -22,7 +23,12 @@ pub(crate) async fn dump(args: &DumpArgs) -> Result<(), crate::args::AnyError> {
     if args.input.is_file() {
         dump_file(&args.input, &output_base, args.output.as_ref()).await?;
     } else if args.input.is_dir() {
-        dump_dir(&args.input, &output_base).await?;
+        dump_dir(
+            &args.input,
+            &output_base,
+            crate::args::progress_handler::CliProgressHandler::new(),
+        )
+        .await?;
     } else {
         return Err("Expected dump input file/dir. But got neither.".into());
     }
@@ -75,24 +81,114 @@ async fn dump_file(
     Ok(())
 }
 
-async fn dump_dir(input_dir: &PathBuf, output_base: &PathBuf) -> Result<(), crate::args::AnyError> {
-    let mut rd = tokio::fs::read_dir(input_dir).await?;
+async fn dump_dir<P>(
+    input_dir: &PathBuf,
+    output_base: &PathBuf,
+    mut progress_handler: P,
+) -> Result<(), crate::args::AnyError>
+where
+    P: ProgressHandler + Send + Sync + Clone + 'static,
+{
+    tokio::fs::create_dir_all(output_base).await?;
 
+    let mut rd = tokio::fs::read_dir(input_dir).await?;
+    let mut handles = tokio::task::JoinSet::new();
+
+    let mut targets = Vec::new();
+
+    // collect targets first (spawn しないものはここで弾く)
     while let Some(entry) = rd.next_entry().await? {
         let path = entry.path();
 
-        if OutFormat::from_input(&path).is_err() {
+        let Some(ext) = path.extension() else {
+            tracing::info!(
+                path = %path.display(),
+                "Skipping file without extension"
+            );
+            continue;
+        };
+
+        if Format::from_extension(ext).is_err() {
+            tracing::info!(
+                path = %path.display(),
+                ext = %ext.to_string_lossy(),
+                "Skipping non-HKX file"
+            );
             continue;
         }
-        let anno = serde_hkx_hkanno::editor::read_hkanno(&path).await?;
 
-        let out = {
-            let input: &PathBuf = &path;
-            let stem = input.file_stem().unwrap();
-            output_base.join(stem).with_extension("txt")
-        };
-        tokio::fs::write(out, anno).await?;
+        targets.push(path);
     }
 
+    if targets.is_empty() {
+        progress_handler.on_empty();
+        return Ok(());
+    }
+
+    progress_handler.on_set_total(targets.len());
+
+    for input in targets {
+        let output_base = output_base.clone();
+
+        let progress_handler = progress_handler.clone();
+        handles.spawn(async move {
+            let result = async {
+                let anno = serde_hkx_hkanno::editor::read_hkanno(&input).await?;
+
+                let stem = input
+                    .file_stem()
+                    .ok_or_else(|| format!("invalid file name: {}", input.display()))?;
+
+                let out = output_base.join(stem).with_extension("txt");
+
+                if let Some(parent) = out.parent() {
+                    tokio::fs::create_dir_all(parent).await?;
+                }
+
+                tokio::fs::write(&out, anno).await?;
+                progress_handler.inc(1);
+                Ok::<_, crate::args::AnyError>(out)
+            }
+            .await;
+
+            (input, result)
+        });
+    }
+
+    while let Some(joined) = handles.join_next().await {
+        match joined {
+            Ok((input, Ok(out))) => {
+                progress_handler.on_processing_path(&input);
+                progress_handler.success_inc(1);
+
+                tracing::info!(
+                    input = %input.display(),
+                    output = %out.display(),
+                    "Dumped annotation"
+                );
+            }
+            Ok((input, Err(err))) => {
+                progress_handler.on_processing_path(&input);
+                progress_handler.failure_inc(1);
+
+                tracing::error!(
+                    error = %err,
+                    path = %input.display(),
+                    "Failed to dump annotation"
+                );
+            }
+            Err(err) => {
+                progress_handler.failure_inc(1);
+                tracing::error!(
+                    error = %err,
+                    "Join error in dump task"
+                );
+            }
+        }
+
+        progress_handler.inc(1);
+    }
+
+    progress_handler.on_finish();
     Ok(())
 }

@@ -87,37 +87,82 @@
 //! - Updated files are written into the directory
 //! - File names are preserved
 //! - The input directory is left unchanged
-use serde_hkx_features::{fs::ReadExt as _, progress::ProgressHandler};
+
+/// Representation command examples.
+pub const EXAMPLES: &str = r#"EXAMPLES:
+- Update a single HKX file in place (default annotation folder, keep format)
+  hkxc anno-update -i paired_1hmkillmovebackstab.hkx
+
+- Update all HKX/XML files in a directory in place
+  hkxc anno-update -i tests/
+
+- Use a specific annotation file for a single input
+  hkxc anno-update -i paired_1hmkillmovebackstab.hkx -a paired_1hmkillmovebackstab.txt
+
+- Apply one annotation file to all files in the input directory
+  hkxc anno-update -i tests/ -a common.txt
+
+- Use a custom annotation directory instead of the default
+  hkxc anno-update -i tests/ -a my-anno-dir/
+
+- Write updated files to a separate output directory (keep original format)
+  hkxc anno-update -i tests/ -o out/
+
+- Write updated file to a different path (keep original format)
+  hkxc anno-update -i paired_1hmkillmovebackstab.hkx -o out/paired_1hmkillmovebackstab.hkx
+
+- Convert output format explicitly while writing to a new location
+  hkxc anno-update -i paired_1hmkillmovebackstab.hkx -o out/paired_1hmkillmovebackstab.hkx -v win32
+
+- Convert all files in a directory to a specific format
+  hkxc anno-update -i tests/ -o out/ -v amd64
+
+
+INVALID PATTERNS:
+- Missing required input
+  hkxc anno-update
+
+- Annotation specified without input
+  hkxc anno-update -a anno.txt
+
+- Input directory with output file path
+  hkxc anno-update -i tests/ -o out/file.hkx
+
+- Non-existent annotation directory
+  hkxc anno-update -i tests/ -a does-not-exist/
+"#;
+
+use serde_hkx_features::{fs::ReadExt as _, progress::ProgressHandler, Format};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, clap::Args)]
-#[clap(arg_required_else_help = true)]
+#[clap(arg_required_else_help = true, after_long_help = EXAMPLES)]
 pub(crate) struct UpdateArgs {
-    /// Annotation source: can be a file or directory. If a file: applies to single input or all files in input directory. If a directory: uses it as the annotation folder to find matching .txt files. If omitted: uses default hkxc-anno-annos folder.
-    #[arg(short = 'a', long = "anno")]
-    anno: Option<PathBuf>,
-
-    /// Input HKX file or directory containing HKX files to update
+    /// Input HKX file or directory to update
     #[arg(short = 'i', long = "input")]
     input: PathBuf,
 
-    /// Output path for updated HKX files. If omitted, overwrites the input files.
+    /// Annotation source: file or directory. default: `hkxc-anno-annos` dir.
+    #[arg(short = 'a', long = "anno")]
+    anno: Option<PathBuf>,
+
+    /// Output path for updated files. If omitted, updates in place.
     #[arg(short = 'o', long = "output")]
     output: Option<PathBuf>,
 
-    /// Output format: 'amd64' for 64-bit Skyrim SE/AE, 'win32' for 32-bit Skyrim LE
+    /// Force output format. If omitted, keeps the input format.
     #[arg(short = 'v', long = "format")]
-    format: serde_hkx_features::OutFormat,
+    format: Option<Format>,
 }
 
 pub(crate) async fn update(args: &UpdateArgs) -> Result<(), crate::args::AnyError> {
-    // Annotation file or dir
-    let anno_base = match args.anno.as_ref() {
-        Some(p) => p,
-        None => Path::new("hkxc-anno-annos"),
-    };
+    let anno_base = args
+        .anno
+        .as_deref()
+        .unwrap_or_else(|| Path::new("hkxc-anno-annos"));
 
     let output = args.output.as_deref();
+
     if args.input.is_file() {
         update_file(&args.input, anno_base, output, args.format).await?;
     } else if args.input.is_dir() {
@@ -129,6 +174,12 @@ pub(crate) async fn update(args: &UpdateArgs) -> Result<(), crate::args::AnyErro
             crate::args::progress_handler::CliProgressHandler::new(),
         )
         .await?;
+    } else {
+        return Err(format!(
+            "Expected a directory or file, but this path is neither.: {}",
+            args.input.display()
+        )
+        .into());
     }
 
     Ok(())
@@ -138,55 +189,55 @@ async fn update_file(
     input: &Path,
     anno_base: &Path,
     output: Option<&Path>,
-    format: serde_hkx_features::OutFormat,
+    forced_format: Option<Format>,
 ) -> Result<(), crate::args::AnyError> {
-    let hkanno_str = load_hkanno_str(input, anno_base).await?;
+    let anno_path = resolve_anno_path(input, anno_base)
+        .ok_or_else(|| format!("annotation not found for input: {}", input.display()))?;
+
+    let hkanno_str = anno_path.read_any_string().await?;
     let mut bytes = input.read_bytes().await?;
 
+    let out_format = decide_output_format(input, forced_format)?;
     let updated = serde_hkx_hkanno::parse_hkanno_str(&hkanno_str)?
-        .update_hkx_bytes(&mut bytes, format, input)?;
+        .update_hkx_bytes(&mut bytes, out_format, input)?;
 
-    let out = output.unwrap_or(input);
+    let mut out = output.unwrap_or(input).to_path_buf();
+    if forced_format.is_some() {
+        out.set_extension(out_format.as_extension());
+    }
+
+    if let Some(parent) = out.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+
     tokio::fs::write(out, updated).await?;
-
     Ok(())
 }
 
-async fn update_dir(
+async fn update_dir<P>(
     input_dir: &Path,
     anno_base: &Path,
     output: Option<&Path>,
-    format: serde_hkx_features::OutFormat,
-    mut progress_handler: impl ProgressHandler,
-) -> Result<(), crate::args::AnyError> {
-    // collect valid inputs
+    forced_format: Option<Format>,
+    mut progress_handler: P,
+) -> Result<(), crate::args::AnyError>
+where
+    P: ProgressHandler + Send + Sync + Clone + 'static,
+{
     let mut targets = Vec::new();
     let mut rd = tokio::fs::read_dir(input_dir).await?;
+
     while let Some(entry) = rd.next_entry().await? {
         let input = entry.path();
 
-        if let Err(e) = serde_hkx_hkanno::OutFormat::from_input(&input) {
-            tracing::info!(
-                path = %input.display(),
-                "Skipping file: {e}"
-            );
+        let Some(ext) = input.extension() else {
+            return Ok(());
+        };
+        if Format::from_extension(ext).is_err() {
             continue;
         }
 
-        let anno_path = {
-            let input: &Path = &input;
-            if anno_base.is_file() {
-                Some(anno_base.to_path_buf());
-            }
-
-            input.file_stem().and_then(|stem| {
-                let path = anno_base.join(stem).with_extension("txt");
-                tracing::debug!(calculated_annotation_path = %path.display());
-                path.exists().then_some(path)
-            })
-        };
-
-        match anno_path {
+        match resolve_anno_path(&input, anno_base) {
             Some(anno_path) => {
                 targets.push((input, anno_path));
             }
@@ -207,7 +258,6 @@ async fn update_dir(
 
     progress_handler.on_set_total(targets.len());
 
-    // output dir create once
     if let Some(dir) = output {
         tokio::fs::create_dir_all(dir).await?;
     }
@@ -216,25 +266,33 @@ async fn update_dir(
 
     for (input, anno_path) in targets {
         let output = output.map(Path::to_path_buf);
+        let forced_format = forced_format;
 
+        let progress_handler = progress_handler.clone();
         handles.spawn(async move {
             let result = async {
                 let hkanno_str = anno_path.read_any_string().await?;
                 let mut bytes = input.read_bytes().await?;
 
+                let out_format = decide_output_format(&input, forced_format)?;
                 let updated = serde_hkx_hkanno::parse_hkanno_str(&hkanno_str)?
-                    .update_hkx_bytes(&mut bytes, format, &input)?;
+                    .update_hkx_bytes(&mut bytes, out_format, &input)?;
 
-                let out = match &output {
+                let mut out = match &output {
                     Some(dir) => dir.join(input.file_name().unwrap()),
                     None => input.clone(),
                 };
+
+                if forced_format.is_some() {
+                    out.set_extension(out_format.as_extension());
+                }
 
                 if let Some(parent) = out.parent() {
                     tokio::fs::create_dir_all(parent).await?;
                 }
 
                 tokio::fs::write(out, updated).await?;
+                progress_handler.inc(1);
                 Ok::<_, crate::args::AnyError>(())
             }
             .await;
@@ -274,15 +332,23 @@ async fn update_dir(
     Ok(())
 }
 
-async fn load_hkanno_str(input: &Path, anno_base: &Path) -> Result<String, crate::args::AnyError> {
+/// Returns annotation txt path.
+fn resolve_anno_path(input: &Path, anno_base: &Path) -> Option<PathBuf> {
     if anno_base.is_file() {
-        return Ok(anno_base.read_any_string().await?);
+        return Some(anno_base.to_path_buf());
     }
 
-    let stem = input
-        .file_stem()
-        .ok_or_else(|| format!("invalid input file: {}", input.display()))?;
+    let stem = input.file_stem()?;
+    let path = anno_base.join(stem).with_extension("txt");
+    path.exists().then_some(path)
+}
 
-    let anno_path = anno_base.join(stem).with_extension("txt");
-    Ok(anno_path.read_any_string().await?)
+fn decide_output_format(
+    input: &Path,
+    forced: Option<Format>,
+) -> Result<Format, crate::args::AnyError> {
+    Ok(match forced {
+        Some(f) => f,
+        None => Format::from_current_format(input)?,
+    })
 }

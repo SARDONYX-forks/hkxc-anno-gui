@@ -28,10 +28,7 @@ tokio = { workspace = true, features = [
 tracing = { workspace = true }
 tracing-subscriber = "0.3.22"
 
-serde_hkx_features = { git = "https://github.com/SARDONYX-sard/serde-hkx", rev = "961233d", default-features = false, features = [
-  "clap",
-  "tracing",
-] }
+serde_hkx_features = { workspace = true, features = ["clap", "tracing"] }
 
 #  workspace members
 serde_hkx_hkanno = { workspace = true }
