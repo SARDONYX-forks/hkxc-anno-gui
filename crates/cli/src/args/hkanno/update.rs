@@ -217,7 +217,7 @@ async fn update_file(
 async fn update_dir<P>(
     input_dir: &Path,
     anno_base: &Path,
-    output: Option<&Path>,
+    output_dir: Option<&Path>,
     forced_format: Option<Format>,
     mut progress_handler: P,
 ) -> Result<(), crate::args::AnyError>
@@ -258,17 +258,16 @@ where
 
     progress_handler.on_set_total(targets.len());
 
-    if let Some(dir) = output {
+    if let Some(dir) = output_dir {
         tokio::fs::create_dir_all(dir).await?;
     }
 
     let mut handles = tokio::task::JoinSet::new();
 
     for (input, anno_path) in targets {
-        let output = output.map(Path::to_path_buf);
+        let output = output_dir.map(Path::to_path_buf);
         let forced_format = forced_format;
 
-        let progress_handler = progress_handler.clone();
         handles.spawn(async move {
             let result = async {
                 let hkanno_str = anno_path.read_any_string().await?;
@@ -279,7 +278,7 @@ where
                     .update_hkx_bytes(&mut bytes, out_format, &input)?;
 
                 let mut out = match &output {
-                    Some(dir) => dir.join(input.file_name().unwrap()),
+                    Some(dir) => dir.join(input.file_name().ok_or_else(|| "Invalid file name")?),
                     None => input.clone(),
                 };
 
@@ -291,8 +290,12 @@ where
                     tokio::fs::create_dir_all(parent).await?;
                 }
 
-                tokio::fs::write(out, updated).await?;
-                progress_handler.inc(1);
+                tokio::fs::write(&out, updated).await?;
+                tracing::info!(
+                    "[Success] Updated file: {} <- By anno: {}",
+                    out.display(),
+                    anno_path.display(),
+                );
                 Ok::<_, crate::args::AnyError>(())
             }
             .await;
@@ -301,6 +304,7 @@ where
         });
     }
 
+    let mut errors = Vec::new();
     while let Some(joined) = handles.join_next().await {
         match joined {
             Ok((input, Ok(()))) => {
@@ -315,6 +319,7 @@ where
                     path = %input.display(),
                     "Failed to update file"
                 );
+                errors.push(e);
             }
             Err(e) => {
                 progress_handler.failure_inc(1);
@@ -322,6 +327,7 @@ where
                     error = %e,
                     "Join error in update task"
                 );
+                errors.push(Box::new(e));
             }
         }
 
@@ -329,7 +335,17 @@ where
     }
 
     progress_handler.on_finish();
-    Ok(())
+
+    if errors.is_empty() {
+        return Ok(());
+    }
+
+    return Err(errors
+        .into_iter()
+        .map(|e| e.to_string())
+        .collect::<Vec<String>>()
+        .join("\n")
+        .into());
 }
 
 /// Returns annotation txt path.

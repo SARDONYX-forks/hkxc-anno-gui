@@ -155,6 +155,7 @@ where
         });
     }
 
+    let mut errors = Vec::new();
     while let Some(joined) = handles.join_next().await {
         match joined {
             Ok((input, Ok(out))) => {
@@ -176,6 +177,7 @@ where
                     path = %input.display(),
                     "Failed to dump annotation"
                 );
+                errors.push(err);
             }
             Err(err) => {
                 progress_handler.failure_inc(1);
@@ -183,6 +185,7 @@ where
                     error = %err,
                     "Join error in dump task"
                 );
+                errors.push(Box::new(err));
             }
         }
 
@@ -190,5 +193,15 @@ where
     }
 
     progress_handler.on_finish();
-    Ok(())
+
+    if errors.is_empty() {
+        return Ok(());
+    }
+
+    return Err(errors
+        .into_iter()
+        .map(|e| e.to_string())
+        .collect::<Vec<String>>()
+        .join("\n")
+        .into());
 }
