@@ -128,9 +128,12 @@ where
     progress_handler.on_set_total(targets.len());
 
     for input in targets {
-        let output_base = output_base.clone();
+        progress_handler.on_processing_path(&input);
+        progress_handler.inc(1);
 
+        let output_base = output_base.clone();
         let progress_handler = progress_handler.clone();
+
         handles.spawn(async move {
             let result = async {
                 let anno = serde_hkx_hkanno::editor::read_hkanno(&input).await?;
@@ -146,10 +149,14 @@ where
                 }
 
                 tokio::fs::write(&out, anno).await?;
-                progress_handler.inc(1);
                 Ok::<_, crate::args::AnyError>(out)
             }
             .await;
+
+            match &result {
+                Ok(_) => progress_handler.success_inc(1),
+                Err(_) => progress_handler.failure_inc(1),
+            }
 
             (input, result)
         });
@@ -159,9 +166,6 @@ where
     while let Some(joined) = handles.join_next().await {
         match joined {
             Ok((input, Ok(out))) => {
-                progress_handler.on_processing_path(&input);
-                progress_handler.success_inc(1);
-
                 tracing::info!(
                     input = %input.display(),
                     output = %out.display(),
@@ -169,9 +173,6 @@ where
                 );
             }
             Ok((input, Err(err))) => {
-                progress_handler.on_processing_path(&input);
-                progress_handler.failure_inc(1);
-
                 tracing::error!(
                     error = %err,
                     path = %input.display(),
@@ -180,7 +181,6 @@ where
                 errors.push(err);
             }
             Err(err) => {
-                progress_handler.failure_inc(1);
                 tracing::error!(
                     error = %err,
                     "Join error in dump task"
@@ -188,8 +188,6 @@ where
                 errors.push(Box::new(err));
             }
         }
-
-        progress_handler.inc(1);
     }
 
     progress_handler.on_finish();

@@ -268,6 +268,11 @@ where
         let output = output_dir.map(Path::to_path_buf);
         let forced_format = forced_format;
 
+        progress_handler.on_processing_path(&input);
+        progress_handler.inc(1);
+
+        let progress_handler = progress_handler.clone();
+
         handles.spawn(async move {
             let result = async {
                 let hkanno_str = anno_path.read_any_string().await?;
@@ -300,6 +305,11 @@ where
             }
             .await;
 
+            match &result {
+                Ok(_) => progress_handler.success_inc(1),
+                Err(_) => progress_handler.failure_inc(1),
+            }
+
             (input, result)
         });
     }
@@ -307,13 +317,8 @@ where
     let mut errors = Vec::new();
     while let Some(joined) = handles.join_next().await {
         match joined {
-            Ok((input, Ok(()))) => {
-                progress_handler.on_processing_path(&input);
-                progress_handler.success_inc(1);
-            }
+            Ok((_input, Ok(()))) => {}
             Ok((input, Err(e))) => {
-                progress_handler.on_processing_path(&input);
-                progress_handler.failure_inc(1);
                 tracing::error!(
                     error = %e,
                     path = %input.display(),
@@ -322,7 +327,6 @@ where
                 errors.push(e);
             }
             Err(e) => {
-                progress_handler.failure_inc(1);
                 tracing::error!(
                     error = %e,
                     "Join error in update task"
@@ -330,8 +334,6 @@ where
                 errors.push(Box::new(e));
             }
         }
-
-        progress_handler.inc(1);
     }
 
     progress_handler.on_finish();
