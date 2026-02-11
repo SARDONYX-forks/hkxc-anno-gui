@@ -74,3 +74,37 @@ jobs:
           name: ${{ env.APP_NAME }}-${{ runner.os }}
           path: |
             ./build/
+
+  cli:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          submodules: true
+      - name: Setup environment
+        uses: ./.github/actions/setup-deps
+        with:
+          platform: ${{ matrix.platform }}
+          build_profile: ${{ env.BUILD_PROFILE }}
+          install_front_deps: false
+          cache_key_suffix: "cli"
+
+      - name: Build CLI
+        run: cargo build -p hkxc --profile ${{ env.BUILD_PROFILE }}
+
+      - name: Move exe -> ./build
+        uses: ./.github/actions/setup-release
+        with:
+          app_name: hkxc
+          build_profile: ${{ env.BUILD_PROFILE }}
+
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: hkxc-${{ runner.os }}
+          path: |
+            ./build/

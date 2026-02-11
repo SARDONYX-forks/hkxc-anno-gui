@@ -20,15 +20,6 @@ snafu = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 
-# FIXME: Sync your serde-hkx, and then replace there comments
-# havok_classes = { git = "https://github.com/beefclot/serde-hkx", rev = "961233d", default-features = false, features = [
-#   "ignore_duplicates",
-# ] }
-# havok_types = { git = "https://github.com/beefclot/serde-hkx", rev = "961233d", default-features = false }
-# serde_hkx_features = { git = "https://github.com/beefclot/serde-hkx", rev = "961233d", default-features = false }
-
-havok_classes = { git = "https://github.com/SARDONYX-sard/serde-hkx", rev = "961233d", default-features = false, features = [
-  "ignore_duplicates",
-] }
-havok_types = { git = "https://github.com/SARDONYX-sard/serde-hkx", rev = "961233d", default-features = false }
-serde_hkx_features = { git = "https://github.com/SARDONYX-sard/serde-hkx", rev = "961233d", default-features = false }
+havok_classes = { workspace = true }
+havok_types = { workspace = true }
+serde_hkx_features = { workspace = true }

@@ -1,0 +1,47 @@
+[package]
+name = "hkxc"
+description = "Forked Havok Behavior (De)Serialization CLI(for ver. hk_2010.2.0-r1) + HkAnno"
+version = "2.0.0"
+categories = ["development-tools"]
+
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.5.57", features = ["derive"] } # For CLI
+clap_complete_command = "0.6.1" # Generate auto completion
+color-print = { version = "0.3.7" } # To color example help
+indicatif = { version = "0.18.0", features = ["rayon"] } # CLI progress bar
+parse-display = { version = "0.10.0" } # Display derive
+tokio = { workspace = true, features = [
+  "macros",
+  "rt",
+  "time",
+  "rt-multi-thread",
+] }
+tracing = { workspace = true }
+tracing-subscriber = "0.3.22"
+
+serde_hkx_features = { workspace = true, features = ["clap", "tracing"] }
+
+#  workspace members
+serde_hkx_hkanno = { workspace = true }
+
+[build-dependencies]
+winres = "0.1.12" # Meta information can be added to the exe.
+
+
+[features]
+default = ["color"]
+
+# ANSI color
+color = []
+
+# Extra output format(json, toml, yaml)
+extra_fmt = ["serde_hkx_features/extra_fmt"]
